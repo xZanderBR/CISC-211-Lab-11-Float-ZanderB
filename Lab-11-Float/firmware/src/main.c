@@ -105,11 +105,14 @@ static uint32_t reinterpret_float(float f)
     return *pi;
 }
 
-static float af1[] = {  0.1, 1.14437421182e-28, -4000.1, -1.9e-5, 1.347e10,
-                        0.0/0.0};
-static float af2[] = {  0.99, 785.066650391,     0.0, -1.9e-5, 2.867e-10,
-                        1.0/0.0};
-
+static float tc[][2] = {
+    {     0.1,                  0.99},  // 
+    {     1.14437421182e-28,   785.066650391},  //
+    { -4000.1,                   0.0,},  // 
+    {    -1.9e-5,               -1.9e-5},  // 
+    {     1.347e10,              2.867e-10},  // 
+    {     1.0,                   0.0}
+};
 #define USING_HW 1
 
 #if USING_HW
@@ -206,7 +209,7 @@ int main ( void )
 #endif //SIMULATOR
 
     int iteration = 0;   
-    int maxIterations = sizeof(af1)/sizeof(float);
+    int maxIterations = sizeof(tc)/sizeof(tc[0]);
     
     while ( true )
     {
@@ -217,8 +220,8 @@ int main ( void )
             
             LED0_Toggle();
             
-            uint32_t ff1 = reinterpret_float(af1[iteration]);
-            uint32_t ff2 = reinterpret_float(af2[iteration]);
+            uint32_t ff1 = reinterpret_float(tc[iteration][0]);
+            uint32_t ff2 = reinterpret_float(tc[iteration][1]);
             
             // Place to store the result of the call to the assy function
             float *max;
@@ -226,7 +229,7 @@ int main ( void )
             // Make the call to the assembly function
             max = asmFmax(ff1,ff2);
             
-            testResult(iteration,af1[iteration],af2[iteration],max);
+            testResult(iteration,tc[iteration][0],tc[iteration][1],max);
                     
              ++iteration;
 #if USING_HW
