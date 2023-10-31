@@ -153,6 +153,8 @@ where:
      expMax:     The UNBIASED exponent of the larger number
                  i.e. the BIASED exponent - 127
      mantMax:    the lower 23b unpacked from the larger number
+     
+     SEE LECTURE SLIDES FOR EXACT REQUIREMENTS on when and how to adjust values!
 
 
 ********************************************************************/    
@@ -160,17 +162,11 @@ where:
 .type asmFmax,%function
 asmFmax:   
 
-    LDR r0,=fMax
-    BX LR
-    
     /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
     
     
     /* YOUR asmFmax CODE ABOVE THIS LINE! ^^^^^^^^^^^^^^^^^^^^^  */
 
-    @ restore the caller's registers, as required by the ARM calling convention
-    
-    /* asmFmax return to caller */
    
 
 /**********************************************************************/   
