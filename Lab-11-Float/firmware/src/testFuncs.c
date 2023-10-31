@@ -42,6 +42,16 @@ static char * pass = "PASS";
 static char * fail = "FAIL";
 static char * oops = "OOPS";
 
+// externs defined in the assembly file:
+extern float f1,f2,fMax;
+extern uint32_t sb1,sb2,signBitMax;
+// ERROR: exp2 is the name of a built-in C function!
+// extern int32_t exp1,exp2,expMax; // adjusted UNBIASED exponent
+extern int32_t expMax; // adjusted UNBIASED exponent
+extern uint32_t mant1,mant2,mantMax; // adjusted mantissa (hidden bit added when appropriate))
+extern int32_t biasedExp1,biasedExp2,biasedExpMax;
+extern uint32_t nanValue;
+
 
 
 /* ************************************************************************** */
@@ -127,6 +137,49 @@ static char * oops = "OOPS";
         return 3;
     }
  */
+
+// have to play games with data types to get floats to be passed in r0 and r1
+// otherwise, assy needs to use VMOV instructions to move from s registers
+// to r registers
+static uint32_t reinterpret_float(float f)
+{
+    float *pf = &f;
+    void * pv = (void *) pf;
+    uint32_t * pi = (uint32_t *) pv;
+    return *pi;
+}
+
+
+// returns true for NaN
+static bool isNan(float inpVal) 
+{
+    uint32_t iFloat;
+    // reinterpret the float as 32b int so we can use bitwise operators
+    iFloat = reinterpret_float(inpVal);
+    // check to see if exp bits are all 1, and mantissa is non-zero
+    if((iFloat&PLUS_INF) == PLUS_INF &&
+       (iFloat&NAN_MASK) != 0) {
+        return true;
+    }
+    return false;
+}
+
+// returns +1 for +inf, -1 for -inf
+static int isInf(float inpVal) 
+{
+    uint32_t iFloat;
+    // reinterpret the float as 32b int so we can use bitwise operators
+    iFloat = reinterpret_float(inpVal);
+    if(iFloat == PLUS_INF) {
+        return 1;
+    }
+    else if (iFloat == NEG_INF) {
+        return -1;
+    }
+    return 0;
+}
+
+
 static void check(int32_t in1, 
         int32_t in2, 
         int32_t *goodCount, 
@@ -168,336 +221,184 @@ static void check(int32_t in1,
   @Remarks
     Refer to the example_file.h interface header for function usage details.
  */
-int32_t calcExpectedValues(
-            int32_t testNum, 
-            char *desc, 
-            uint32_t packedValue,
-            expectedValues *e)
+
+void calcExpectedValues(
+        float input, // test number
+        expectedValues *e)  // ptr to struct where values will be stored
 {
-    e->packedVal = packedValue;
-    // calculate sign-extended A and B
-    
-    // Multiplicand A
-    e->inputA = 0;
-    e->inputB = 0;
-    // unpack A
-    e->inputA =  packedValue>>16;
-    e->signA = e->inputA & 0x8000;
-    if (e->signA != 0)
+    // TODO!!!!!!!!!!
+    if (true == isNan(input)) // if NaN...
     {
-        e->signA = 1;
-        e->inputA = e->inputA | 0xFFFF8000;
+        e->floatVal = NAN;
+        e->intVal = reinterpret_float(e->floatVal);
+        e->biasedExp = 0xFF;
+        e->unbiasedExp = 0xFF-127;
+        e->signBit = e->intVal >> 31;
+        e->mantissa = 0x7FFFFF; // It can be any non-0 value, we'll use all 1's.
     }
-    e->absA = abs(e->inputA);
-    
-    // Multiplicand B
-    // unpack B
-    e->signB = packedValue & 0x8000;
-    if (e->signB != 0)
+    else if (true == isInf(input))   // if +/- inf
     {
-        e->signB = 1;
-        e->inputB = packedValue | 0xFFFF8000;
+        e->floatVal = input;
+        e->intVal = reinterpret_float(e->floatVal);
+        e->biasedExp = 0xFF;
+        e->unbiasedExp = 0xFF-127;
+        e->signBit = e->intVal >> 31; // could be +/- inf
+        e->mantissa = 0x0;      // for +/- inf, this must be zero 
     }
-    else
+    else // either subnormal or normal float
     {
-        e->inputB = packedValue & 0x0000FFFF;
+        e->floatVal = input;
+        e->intVal = reinterpret_float(e->floatVal);
+        e->signBit = e->intVal >> 31; // could be +/- inf
+        e->biasedExp = e->intVal >>23;
+        e->unbiasedExp = e->biasedExp - 127;
+        e->mantissa = e->intVal & 0x7FFFFF; // mask off LSB 23 bits
+        if(e->unbiasedExp == -127) // then this is a subnormal number
+        {
+            // adjust to -126, and skip adding hidden bit to mantissa
+            e->unbiasedExp = -126;
+        }
+        else // not subnormal; just a run-of-the-mill float...
+        {
+            // add hidden bit to mantissa
+            e->mantissa = e->mantissa | 0x800000; // add  missing bit    
+        }
     }
-    e->absB = abs(e->inputB);
-    
-    e->initProduct = e->absA * e->absB;
-    e->finalProduct = e->inputA * e->inputB;
-
-    return 0;
-}
-
-
-/** 
-  @Function
-    int ExampleInterfaceFunctionName ( int param1, int param2 ) 
-
-  @Summary
-    Brief one-line description of the function.
-
-  @Remarks
-    Refer to the example_file.h interface header for function usage details.
- */
-void testAsmUnpack(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t packedVal, // inputs
-        int32_t * unpackedA,     // outputs
-        int32_t * unpackedB,
-        int32_t inputA,    // expected values
-        int32_t inputB,
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        )
-{
-    *failCount = 0;
-    *passCount = 0;
-    char *aCheck = oops;
-    char *bCheck = oops;
-    
-    check(inputA, *unpackedA, passCount, failCount, &aCheck);
-    check(inputB, *unpackedB, passCount, failCount, &bCheck);
-
-    // build the string to be sent out over the serial lines
-    snprintf((char*)txBuffer, MAX_PRINT_LEN,
-            "========= testAsmUnpack %s test number: %ld\r\n"
-            "packed (input) value:    0x%08lx\r\n"
-            "unpacked A (multiplicand) value: %11ld; 0x%08lx\r\n"
-            "expected A (multiplicand) value: %11ld; 0x%08lx\r\n"
-            "unpacked B (multiplier) value:   %11ld; 0x%08lx\r\n"
-            "expected B (multiplier) value:   %11ld; 0x%08lx\r\n"
-            "unpacked A pass/fail:            %s\r\n"
-            "unpacked B pass/fail:            %s\r\n"
-            "========= END -- asmUnpack debug output\r\n"
-            "\r\n",
-            desc,
-            testNum,
-            packedVal, 
-            *unpackedA,*unpackedA,
-            inputA,inputA,
-            *unpackedB,*unpackedB,
-            inputB,inputB,
-            aCheck,bCheck
-            ); 
-
-    printAndWait((char *)txBuffer, txComplete);
-    return ;
-};
-
-void testAsmAbs(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        int32_t signedInput,  //inputs
-        int32_t * absVal,        // I/O
-        int32_t * signBit,
-        int32_t r0_absVal,   // outputs
-        int32_t expAbs,  // expected values
-        int32_t expSignBit,  // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        )
-{
-    *failCount = 0;
-    *passCount = 0;
-    char *absMemCheck = oops;
-    char *sbMemCheck = oops;
-    char *r0Check = oops;
-    
-    check(expAbs, *absVal, passCount, failCount, &absMemCheck);
-    check(expAbs, r0_absVal, passCount, failCount, &r0Check);
-    check(expSignBit, *signBit, passCount, failCount, &sbMemCheck);
-
-    // build the string to be sent out over the serial lines
-    snprintf((char*)txBuffer, MAX_PRINT_LEN,
-            "========= testAsmAbs %s test number: %ld\r\n"
-            "signed input value:    0x%08lx\r\n"
-            "abs value stored in mem:  %11ld; 0x%08lx; %s\r\n"
-            "abs value returned in r0: %11ld; 0x%08lx; %s\r\n"
-            "sign bit stored in mem:   %11ld; 0x%08lx; %s\r\n"
-            "expected abs value:   %11ld; 0x%08lx\r\n"
-            "expected sign bit:    %11ld\r\n"
-            "========= END -- asmAbs debug output\r\n"
-            "\r\n",
-            desc,
-            testNum,
-            signedInput, 
-            *absVal,*absVal,absMemCheck,
-            r0_absVal,r0_absVal,r0Check,
-            *signBit,*signBit,sbMemCheck,
-            expAbs,expAbs,
-            expSignBit
-            ); 
-
-    printAndWait((char *)txBuffer, txComplete);
-    return ;
-}
-
-
-void testAsmMult(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        int32_t absA, // inputs
-        int32_t absB,
-        int32_t r0_initProd, // outputs
-        int32_t expectedInitProduct, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        )
-{
-    *failCount = 0;
-    *passCount = 0;
-    char *prodCheck = oops;
-    
-    check(expectedInitProduct, r0_initProd, passCount, failCount, &prodCheck);
-
-    // build the string to be sent out over the serial lines
-    snprintf((char*)txBuffer, MAX_PRINT_LEN,
-            "========= testAsmMult %s test number: %ld\r\n"
-            "Inputs:\r\n"
-            "abs value A:             %11ld; 0x%08lx\r\n"
-            "abs value B:             %11ld; 0x%08lx\r\n"
-            "Output:\r\n"
-            "product abs(A) * abs(B): %11ld; 0x%08lx; %s\r\n"
-            "Expected product:        %11ld; 0x%08lx\r\n"
-            "========= END -- asmMult debug output\r\n"
-            "\r\n",
-            desc,
-            testNum,
-            absA,absA,
-            absB,absB,
-            r0_initProd,r0_initProd,prodCheck,
-            expectedInitProduct,expectedInitProduct
-            ); 
-
-    printAndWait((char *)txBuffer, txComplete);
-    return;
-}
-
-void testAsmFixSign(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t initProduct, // inputs
-        int32_t signA, 
-        int32_t signB,
-        int32_t r0_finalProduct, // outputs
-        int32_t expectedFinalProduct, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        )
-{
-    *failCount = 0;
-    *passCount = 0;
-    char *prodCheck = oops;
-    
-    check(expectedFinalProduct, r0_finalProduct, passCount, failCount, &prodCheck);
-
-    // build the string to be sent out over the serial lines
-    snprintf((char*)txBuffer, MAX_PRINT_LEN,
-            "========= testAsmFixSign %s test number: %ld\r\n"
-            "Inputs:\r\n"
-            "Initial (unsigned) product: %11ld; 0x%08lx\r\n"
-            "sign bit A:                 %ld\r\n"
-            "sign bit B:                 %ld\r\n"
-            "Output:\r\n"
-            "Final (signed) product:     %11ld; 0x%08lx; %s\r\n"
-            "Expected product:           %11ld; 0x%08lx\r\n"
-            "========= END -- asmFixSign debug output\r\n"
-            "\r\n",
-            desc,
-            testNum,
-            initProduct,initProduct,
-            signA,
-            signB,
-            r0_finalProduct,r0_finalProduct,prodCheck,
-            expectedFinalProduct,expectedFinalProduct
-            ); 
-
-    printAndWait((char *)txBuffer, txComplete);
+        
     return;
 }
 
 
 
-void testAsmMain(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t packedVal, // inputs
-        int32_t r0_mainFinalProd, // outputs
-        int32_t a,
-        int32_t b,
-        int32_t aAbs, 
-        int32_t aSign, 
-        int32_t bAbs, 
-        int32_t bSign,
-        int32_t initProduct,
-        int32_t finalProduct,
-        expectedValues * exp, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        )
+void testResult(int testNum, 
+                      float testVal1, // val passed to asm in r0
+                      float testVal2, // val passed to asm in r1
+                      float*pResult, // pointer to max chosen by asm code
+                      float *pGood, //ptr to correct location
+                      int32_t* passCnt,
+                      int32_t* failCnt,
+                      volatile bool * txComplete)
 {
-    *failCount = 0;
-    *passCount = 0;
-    char *aCheck = oops;
-    char *bCheck = oops;
-    char *aSignCheck = oops;
-    char *bSignCheck = oops;
-    char *aAbsCheck = oops;
-    char *bAbsCheck = oops;
-    char *initProdCheck = oops;
-    char *finalProdCheck = oops;
-    char *r0Check = oops;
+    float asmResult = *pResult;
+    int asmInf = isInf(asmResult);
+    bool asmNan = isNan(asmResult);
+    int inp1Inf = isInf(testVal1);
+    bool inp1Nan = isNan(testVal1);
+    int inp2Inf = isInf(testVal2);
+    bool inp2Nan = isNan(testVal2);
+    expectedValues e;
 
-    check(exp->inputA, a, passCount, failCount, &aCheck);
-    check(exp->inputB, b, passCount, failCount, &bCheck);
-    check(exp->signA, aSign, passCount, failCount, &aSignCheck);
-    check(exp->signB, bSign, passCount, failCount, &bSignCheck);
-    check(exp->absA, aAbs, passCount, failCount, &aAbsCheck);
-    check(exp->absB, bAbs, passCount, failCount, &bAbsCheck);
-    check(exp->initProduct, initProduct, passCount, failCount, &initProdCheck);
-    check(exp->finalProduct, finalProduct, passCount, failCount, &finalProdCheck);
-    check(exp->finalProduct, r0_mainFinalProd, passCount, failCount, &r0Check);
- 
-    snprintf((char*)txBuffer, MAX_PRINT_LEN,
-            "========= testAsmMain %s test number: %ld\r\n"
-            "test case INPUT: packed value:    0x%08lx\r\n"
-            "test case INPUT: multiplier (a):   %11ld; 0x%08lx\r\n"
-            "test case INPUT: multiplicand (b): %11ld; 0x%08lx\r\n"
-            "a check p/f:           %s\r\n"
-            "b check p/f:           %s\r\n"
-            "sign bit a check p/f:  %s\r\n"
-            "sign bit b check p/f:  %s\r\n"
-            "abs a check p/f:       %s\r\n"
-            "abs b check p/f:       %s\r\n"
-            "initial product p/f:   %s\r\n"
-            "final product p/f:     %s\r\n"
-            "returned result p/f:   %s\r\n"
-            "debug values        expected        actual\r\n"
-            "a_Multiplicand:..%11ld   %11ld\r\n"
-            "b_Multiplier:....%11ld   %11ld\r\n"
-            "a_Sign:..........%11ld   %11ld\r\n"
-            "b_Sign:..........%11ld   %11ld\r\n"
-            "a_Abs:...........%11ld   %11ld\r\n"
-            "b_Abs:...........%11ld   %11ld\r\n"
-            "init_Product:....%11ld   %11ld\r\n"
-            "final_Product:...%11ld   %11ld\r\n"
-            "returned value:..%11ld   %11ld\r\n",
-            desc,
-            testNum,
-            exp->packedVal,
-            exp->inputA, exp->inputA,
-            exp->inputB, exp->inputB,
-            aCheck,
-            bCheck,
-            aSignCheck,
-            bSignCheck,
-            aAbsCheck,
-            bAbsCheck,
-            initProdCheck,
-            finalProdCheck,
-            r0Check,
-            exp->inputA, a,
-            exp->inputB, b,
-            exp->signA, aSign,
-            exp->signB, bSign,
-            exp->absA, aAbs,
-            exp->absB, bAbs,
-            exp->initProduct, initProduct,
-            exp->finalProduct, finalProduct,
-            exp->finalProduct, r0_mainFinalProd
-            );
+    char * ptrCheck = oops;
+
+    char *s1 = pass;
+    *passCnt = 0;
+    *failCnt = 0;
     
-    printAndWait((char *)txBuffer, txComplete);
+    check((int32_t)(&fMax),(int32_t)pResult,passCnt,failCnt,&ptrCheck);
+    
+    //int32_t  goodExponent = ((iGoodMax >>23) & 0xFF) - 127;
+    //if goodExponent == -127
+    //uint32_t goodMantissa = iGoodMax & 0x7FFFFF;
+
+    
+    if (inp1Nan || inp2Nan) // if either or both test inputs were NaN ...
+    {
+        calcExpectedValues(NAN, &e);
+        if (true != asmNan) // if asm value was not NAN
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }
+    else if ((inp1Inf ==1) || (inp2Inf == 1)) // if either input was +inf
+    {
+        calcExpectedValues(INFINITY, &e);
+        if (true != asmInf) // fail if max was not set to +inf
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }
+    else if (inp1Inf == -1) // if f1 was -inf, then assume f2 was max
+    {
+        calcExpectedValues(testVal2, &e);
+        if (testVal2 != asmResult) 
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }
+    else if (inp2Inf == -1)  // else if f2 was -inf, then assume f1 was max
+    {
+        calcExpectedValues(testVal1, &e);
+        if (testVal1 != asmResult) 
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }    
+    else if(testVal1<testVal2) // else, check to see which was larger
+    {
+        calcExpectedValues(testVal2, &e);
+        if (testVal2 != asmResult) 
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }
+    else // either testVal1 is greater, or they are equal
+    {
+        calcExpectedValues(testVal1, &e);
+        if (testVal1 != asmResult) 
+        {
+            s1 = fail;
+            *failCnt += 1;
+        }
+        else
+        {
+            *passCnt += 1;
+        }
+    }
+       
+    snprintf((char*)txBuffer, MAX_PRINT_LEN,
+            "========= Test Number: %d\r\n"
+            "inp1: %.4e; inp2: %.4e \r\n"
+            "expected: %.4e; your result: %.4e; %s \r\n"
+            "pointer check: %s\r\n"
+            "tests passed: %ld; tests failed: %ld \r\n"
+            "\r\n",
+            testNum,
+            testVal1,testVal2,
+            e.floatVal,asmResult,s1,
+            ptrCheck,
+            *passCnt,*failCnt); 
+    printAndWait((char*)txBuffer,txComplete);
+    
     return;
 }
+
+
+
 
 /* *****************************************************************************
  End of File

@@ -64,6 +64,7 @@
 #include <float.h>
 #include "definitions.h"                // SYS function prototypes
 #include "printFuncs.h"  // lab print funcs
+#include "testFuncs.h"  // lab print funcs
 
 /* RTC Time period match values for input clock of 1 KHz */
 #define PERIOD_50MS                             51
@@ -93,9 +94,9 @@ static volatile bool changeTempSamplingRate = false;
 static volatile bool isUSARTTxComplete = true;
 static uint8_t uartTxBuffer[MAX_PRINT_LEN] = {0};
 
-static char * pass = "PASS";
-static char * fail = "FAIL";
-static char * oops = "OOPS";
+// static char * pass = "PASS";
+// static char * fail = "FAIL";
+// static char * oops = "OOPS";
 
 // PROF COMMENT:
 // The ARM calling convention permits the use of up to 4 registers, r0-r3
@@ -130,6 +131,7 @@ static uint32_t reinterpret_float(float f)
 }
 
 static float tc[][2] = {
+    {     NAN,                  1.0},
     {     0.1,                  0.99},  // 
     {     1.14437421182e-28,   785.066650391},  //
     { -4000.1,                   0.0,},  // 
@@ -156,6 +158,7 @@ static void usartDmaChannelHandler(DMAC_TRANSFER_EVENT event, uintptr_t contextH
 }
 #endif
 
+#if 0
 // returns true for NaN
 bool isNan(float inpVal) 
 {
@@ -186,7 +189,7 @@ int isInf(float inpVal)
 }
 
 
-// return failure count. A return value of 0 means everything passed.
+
 static void testResult(int testNum, 
                       float testVal1, 
                       float testVal2, 
@@ -301,7 +304,7 @@ static void testResult(int testNum,
     
     return;
 }
-
+#endif
 
 #if 0
 // return failure count. A return value of 0 means everything passed.
@@ -416,6 +419,7 @@ int main ( void )
             
             testResult(iteration,tc[iteration][0],tc[iteration][1],
                     max,
+                    &fMax,
                     &passCount,
                     &failCount,
                     &isUSARTTxComplete);

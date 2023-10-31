@@ -68,31 +68,25 @@ extern "C" {
 // #define EXAMPLE_CONSTANT 0
 
 
+#define PLUS_INF ((0x7F800000))
+#define NEG_INF  ((0xFF800000))
+#define NAN_MASK  (~NEG_INF)
+
+#ifndef NAN
+#define NAN ((0.0/0.0))
+#endif
+
+#ifndef INFINITY
+#define INFINITY ((1.0f/0.0f))
+#define NEG_INFINITY ((-1.0f/0.0f))
+#endif
+
+
     // *****************************************************************************
     // *****************************************************************************
     // Section: Data Types
     // *****************************************************************************
     // *****************************************************************************
-
-// define structs to make testing easier
-typedef struct _multOperand {
-    int32_t signedInputValue;
-    int32_t absValue; /* absolute value of input value */
-    int32_t signBit; /* sign bit of input value, 0 = +, 1 = - */
-} multOperand;
-
-typedef struct _expectedValues
-{
-    uint32_t packedVal;
-    int32_t inputA;
-    int32_t inputB;
-    int32_t absA;
-    int32_t absB;
-    int32_t signA;
-    int32_t signB;
-    int32_t initProduct;
-    int32_t finalProduct;
-} expectedValues;
 
 
     // *****************************************************************************
@@ -116,6 +110,16 @@ typedef struct _expectedValues
         Describe enumeration elements and structure and union members above each 
         element or member.
      */
+typedef struct _expectedValues
+{
+    float floatVal;
+    uint32_t intVal;
+    uint32_t signBit;
+    uint32_t biasedExp;
+    int32_t unbiasedExp; // adjusted to -126 wen -127 and not 
+    uint32_t  mantissa; // adjusted to have hidden bit when appropriate
+} expectedValues;
+
     
 
     // *****************************************************************************
@@ -173,89 +177,19 @@ typedef struct _expectedValues
         }
      */
 
-    int32_t calcExpectedValues(
-            int32_t testNum, // test number
-            char *desc,      // optional test descriptor, or ""
-            uint32_t packedValue, // test case input
-            expectedValues *e);   // ptr to struct where values will be stored
+void calcExpectedValues(
+        float input, // test number
+        expectedValues *e);   // ptr to struct where values will be stored
 
 
-void testAsmUnpack(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t packedVal, // inputs
-        int32_t * unpackedA,     // outputs
-        int32_t * unpackedB,
-        int32_t inputA,    // expected values
-        int32_t inputB,
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        );
-
-void testAsmAbs(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        int32_t signedInput,  //inputs
-        int32_t * absVal,        // I/O
-        int32_t * signBit,
-        int32_t r0_absVal,   // outputs
-        int32_t expAbs,  // expected values
-        int32_t expSignBit,  // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        );
-
-
-void testAsmMult(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        int32_t absA, // inputs
-        int32_t absB,
-        int32_t r0_initProd, // outputs
-        int32_t expectedInitProduct, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        );
-
-
-void testAsmFixSign(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t initProduct, // inputs
-        int32_t signA, 
-        int32_t signB,
-        int32_t r0_finalProduct, // outputs
-        int32_t expectedFinalProduct, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        );
-
-
-
-void testAsmMain(
-        int32_t testNum, // test number
-        char *desc, // optional description, or ""
-        uint32_t packedVal, // inputs
-        int32_t r0_mainFinalProd, // outputs
-        int32_t aMultiplicand,
-        int32_t bMultiplier,
-        int32_t aAbs, 
-        int32_t aSign, 
-        int32_t bAbs, 
-        int32_t bSign,
-        int32_t init_Product,
-        int32_t final_Product,
-        expectedValues * exp, // expected values
-        int32_t * passCount,
-        int32_t * failCount,
-        volatile bool * txComplete
-        );
-
-
+void testResult(int testNum, 
+                      float testVal1, // val passed to asm in r0
+                      float testVal2, // val passed to asm in r1
+                      float*pResult, // pointer to max chosen by asm code
+                      float *pGood, //ptr to correct location
+                      int32_t* passCnt,
+                      int32_t* failCnt,
+                      volatile bool * txComplete);
 
 
     /* Provide C++ Compatibility */
