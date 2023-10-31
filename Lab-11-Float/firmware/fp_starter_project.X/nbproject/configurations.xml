@@ -244,6 +244,8 @@
       </logicalFolder>
       <itemPath>../src/main.c</itemPath>
       <itemPath>../src/asmFmax.s</itemPath>
+      <itemPath>../src/printFuncs.c</itemPath>
+      <itemPath>../src/printFuncs.h</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>

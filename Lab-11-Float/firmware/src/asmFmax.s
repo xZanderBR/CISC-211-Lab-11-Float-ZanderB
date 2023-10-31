@@ -56,6 +56,19 @@ nanValue: .word 0x7FFFFFFF
 .align
 
 /********************************************************************
+ function name: initVariables
+    input:  none
+    output: initializes all f1*, f2*, and *Max varibales to 0
+********************************************************************/
+.global initVariables
+ .type initVariables,%function
+initVariables:
+    /* YOUR initVariables CODE BELOW THIS LINE! Don't forget to push and pop! */
+
+    /* YOUR initVariables CODE ABOVE THIS LINE! Don't forget to push and pop! */
+
+    
+/********************************************************************
  function name: getSignBit
     input:  r0: address of mem containing 32b float to be unpacked
             r1: address of mem to store sign bit (bit 31).
@@ -64,6 +77,7 @@ nanValue: .word 0x7FFFFFFF
                 use sb1, sb2, or signBitMax for storage, as needed
     output: [r1]: mem location given by r1 contains the sign bit
 ********************************************************************/
+.global getSignBit
 .type getSignBit,%function
 getSignBit:
     /* YOUR getSignBit CODE BELOW THIS LINE! Don't forget to push and pop! */
@@ -75,7 +89,7 @@ getSignBit:
 /********************************************************************
  function name: getExponent
     input:  r0: address of mem containing 32b float to be unpacked
-            r1: address of mem to store BIASED 
+            r1: address of mem to store BIASED
                 bits 23-30 (exponent) 
                 BIASED means the unpacked value (range 0-255)
                 use exp1, exp2, or expMax for storage, as needed
@@ -87,9 +101,10 @@ getSignBit:
                   original (biased) exponent bits, in the lower 8b of the mem 
                   location
             [r2]: mem location given by r2 contains the unpacked
-                  and UNNBIASED exponent bits, in the lower 8b of the mem 
+                  and UNBIASED exponent bits, in the lower 8b of the mem 
                   location
 ********************************************************************/
+.global getExponent
 .type getExponent,%function
 getExponent:
     /* YOUR getExponent CODE BELOW THIS LINE! Don't forget to push and pop! */
@@ -107,6 +122,7 @@ getExponent:
     output: [r1]: mem location given by r1 contains the unpacked
                   mantissa bits
 ********************************************************************/
+.global getMantissa
 .type getMantissa,%function
 getMantissa:
     /* YOUR getMantissa CODE BELOW THIS LINE! Don't forget to push and pop! */
@@ -144,13 +160,15 @@ where:
 .type asmFmax,%function
 asmFmax:   
 
+    LDR r0,=fMax
+    BX LR
     
     /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
     
     
     /* YOUR asmFmax CODE ABOVE THIS LINE! ^^^^^^^^^^^^^^^^^^^^^  */
 
-    # restore the caller's registers, as required by the ARM calling convention
+    @ restore the caller's registers, as required by the ARM calling convention
     
     /* asmFmax return to caller */
    
