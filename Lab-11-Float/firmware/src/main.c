@@ -131,12 +131,19 @@ static uint32_t reinterpret_float(float f)
 }
 
 static float tc[][2] = {
-    {     NAN,                  1.0},
+    {     1.0,                  2.0}, 
+    {    -3.1,                  -1.2}, 
+    {     NAN,                  1.0}, 
+    {    -1.0,                  NAN}, 
     {     0.1,                  0.99},  // 
     {     1.14437421182e-28,   785.066650391},  //
     { -4000.1,                   0.0,},  // 
     {    -1.9e-5,               -1.9e-5},  // 
     {     1.347e10,              2.867e-10},  // 
+    {     1.4e-42,              -3.2e-43}, // subnormals
+    {     -2.4e-42,              2.313e29}, // subnormals
+    {    INFINITY,           NEG_INFINITY},
+    {    NEG_INFINITY,           -6.24},
     {     1.0,                   0.0}
 };
 #define USING_HW 1
