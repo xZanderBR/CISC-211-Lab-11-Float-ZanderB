@@ -93,8 +93,9 @@ static volatile bool changeTempSamplingRate = false;
 static volatile bool isUSARTTxComplete = true;
 static uint8_t uartTxBuffer[MAX_PRINT_LEN] = {0};
 
-static char * pass = "pass";
+static char * pass = "PASS";
 static char * fail = "FAIL";
+static char * oops = "OOPS";
 
 // PROF COMMENT:
 // The ARM calling convention permits the use of up to 4 registers, r0-r3
@@ -155,10 +156,13 @@ static void usartDmaChannelHandler(DMAC_TRANSFER_EVENT event, uintptr_t contextH
 }
 #endif
 
+// returns true for NaN
 bool isNan(float inpVal) 
 {
     uint32_t iFloat;
+    // reinterpret the float as 32b int so we can use bitwise operators
     iFloat = reinterpret_float(inpVal);
+    // check to see if exp bits are all 1, and mantissa is non-zero
     if((iFloat&PLUS_INF) == PLUS_INF &&
        (iFloat&NAN_MASK) != 0) {
         return true;
@@ -166,9 +170,11 @@ bool isNan(float inpVal)
     return false;
 }
 
+// returns +1 for +inf, -1 for -inf
 int isInf(float inpVal) 
 {
     uint32_t iFloat;
+    // reinterpret the float as 32b int so we can use bitwise operators
     iFloat = reinterpret_float(inpVal);
     if(iFloat == PLUS_INF) {
         return 1;
@@ -179,18 +185,7 @@ int isInf(float inpVal)
     return 0;
 }
 
-#if 0
-static void testResult(int testNum, 
-                      float testVal1, 
-                      float testVal2, 
-                      float*pResult,// pointer to max chosen by asm code
-                      int32_t* passCnt,
-                      int32_t* failCnt,
-                      volatile bool * txComplete)
-{ return; }
-#endif
 
-#if 1
 // return failure count. A return value of 0 means everything passed.
 static void testResult(int testNum, 
                       float testVal1, 
@@ -306,7 +301,7 @@ static void testResult(int testNum,
     
     return;
 }
-#endif
+
 
 #if 0
 // return failure count. A return value of 0 means everything passed.

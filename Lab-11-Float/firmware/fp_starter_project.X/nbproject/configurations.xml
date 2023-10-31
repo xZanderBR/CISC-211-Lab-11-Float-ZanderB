@@ -246,6 +246,8 @@
       <itemPath>../src/asmFmax.s</itemPath>
       <itemPath>../src/printFuncs.c</itemPath>
       <itemPath>../src/printFuncs.h</itemPath>
+      <itemPath>../src/testFuncs.c</itemPath>
+      <itemPath>../src/testFuncs.h</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>
