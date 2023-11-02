@@ -141,7 +141,9 @@ extern uint32_t nanValue;
 // have to play games with data types to get floats to be passed in r0 and r1
 // otherwise, assy needs to use VMOV instructions to move from s registers
 // to r registers
-static uint32_t reinterpret_float(float f)
+// More modern C standards support these conversions, but I don't think
+// the MPLABS compiler does. At least, I couldn't make it work. --VB
+static uint32_t reinterpret_float_to_uint(float f)
 {
     float *pf = &f;
     void * pv = (void *) pf;
@@ -149,13 +151,26 @@ static uint32_t reinterpret_float(float f)
     return *pi;
 }
 
+#if 0
+
+// Allows easy conversion of a bit pattern to its equivalent float value
+// More modern C standards support these conversions, but I don't think
+// the MPLABS compiler does. At least, I couldn't make it work. --VB
+static float reinterpret_uint_to_float(uint32_t ui)
+{
+    uint32_t *pu = &ui;
+    void * pv = (void *) pu;
+    float * pf = (float *) pv;
+    return *pf;
+}
+#endif
 
 // returns true for NaN
 static bool isNan(float inpVal) 
 {
     uint32_t iFloat;
     // reinterpret the float as 32b int so we can use bitwise operators
-    iFloat = reinterpret_float(inpVal);
+    iFloat = reinterpret_float_to_uint(inpVal);
     // check to see if exp bits are all 1, and mantissa is non-zero
     if((iFloat&PLUS_INF) == PLUS_INF &&
        (iFloat&NAN_MASK) != 0) {
@@ -169,7 +184,7 @@ static int isInf(float inpVal)
 {
     uint32_t iFloat;
     // reinterpret the float as 32b int so we can use bitwise operators
-    iFloat = reinterpret_float(inpVal);
+    iFloat = reinterpret_float_to_uint(inpVal);
     if(iFloat == PLUS_INF) {
         return 1;
     }
@@ -199,6 +214,34 @@ static void check(int32_t in1,
     return;
 }
 
+static void checkMantissa(int32_t in1, 
+        int32_t in2, 
+        uint32_t ubExp,    // unbiased exponent
+        int32_t *goodCount, 
+        int32_t *badCount,
+        char **pfString )
+{
+    // if NaN or +/- inf
+    if(ubExp == 255) // only check lower 23 bits of mantissa
+    {
+        in1 = in1 && 0x7FFFFF;
+        in2 = in2 && 0x7FFFFF;
+    }
+    if (in1 == in2)
+    {
+        *goodCount += 1;
+        *pfString = pass;
+    }
+    else
+    {
+        *badCount += 1;
+        *pfString = fail;        
+    }
+    return;
+}
+
+
+
 /* ************************************************************************** */
 /* ************************************************************************** */
 // Section: Interface Functions                                               */
@@ -226,11 +269,11 @@ void calcExpectedValues(
         float input, // test number
         expectedValues *e)  // ptr to struct where values will be stored
 {
-    // TODO!!!!!!!!!!
+
     if (true == isNan(input)) // if NaN...
     {
         e->floatVal = NAN;
-        e->intVal = reinterpret_float(e->floatVal);
+        e->intVal = reinterpret_float_to_uint(e->floatVal);
         e->biasedExp = 0xFF;
         e->unbiasedExp = 0xFF-127;
         e->signBit = e->intVal >> 31;
@@ -239,7 +282,7 @@ void calcExpectedValues(
     else if (true == isInf(input))   // if +/- inf
     {
         e->floatVal = input;
-        e->intVal = reinterpret_float(e->floatVal);
+        e->intVal = reinterpret_float_to_uint(e->floatVal);
         e->biasedExp = 0xFF;
         e->unbiasedExp = 0xFF-127;
         e->signBit = e->intVal >> 31; // could be +/- inf
@@ -248,9 +291,9 @@ void calcExpectedValues(
     else // either subnormal or normal float
     {
         e->floatVal = input;
-        e->intVal = reinterpret_float(e->floatVal);
+        e->intVal = reinterpret_float_to_uint(e->floatVal);
         e->signBit = e->intVal >> 31; // could be +/- inf
-        e->biasedExp = e->intVal >>23;
+        e->biasedExp = (e->intVal >>23) & 0xFF;
         e->unbiasedExp = e->biasedExp - 127;
         e->mantissa = e->intVal & 0x7FFFFF; // mask off LSB 23 bits
         if(e->unbiasedExp == -127) // then this is a subnormal number
@@ -280,118 +323,103 @@ void testResult(int testNum,
                       volatile bool * txComplete)
 {
     float asmResult = *pResult;
-    int asmInf = isInf(asmResult);
-    bool asmNan = isNan(asmResult);
-    int inp1Inf = isInf(testVal1);
-    bool inp1Nan = isNan(testVal1);
-    int inp2Inf = isInf(testVal2);
-    bool inp2Nan = isNan(testVal2);
+    uint32_t iMax = reinterpret_float_to_uint(fMax);
+
+    // int asmInf = isInf(asmResult);  // did the asm code return +/- inf?
+    // bool asmNan = isNan(asmResult); // did the asm code return NaN?
+    int inp1Inf = isInf(testVal1);  // was test input 1 +/- inf?
+    bool inp1Nan = isNan(testVal1); // was test input 1 NaN?
+    int inp2Inf = isInf(testVal2);  // was test input 2 +/- inf?
+    bool inp2Nan = isNan(testVal2); // was test input 1 NaN?
+    
     expectedValues e;
 
+    // place to store pass/fail strings
     char * ptrCheck = oops;
+    char * maxCheck = oops;
+    char * sbCheck = oops;
+    char * biasedExpCheck = oops;
+    char * unbiasedExpCheck = oops;
+    char * mantCheck = oops;
 
-    char *s1 = pass;
     *passCnt = 0;
     *failCnt = 0;
     
-    check((int32_t)(&fMax),(int32_t)pResult,passCnt,failCnt,&ptrCheck);
     
     //int32_t  goodExponent = ((iGoodMax >>23) & 0xFF) - 127;
     //if goodExponent == -127
     //uint32_t goodMantissa = iGoodMax & 0x7FFFFF;
 
-    
+    // load the expected results struct with the expected answers
     if (inp1Nan || inp2Nan) // if either or both test inputs were NaN ...
     {
         calcExpectedValues(NAN, &e);
-        if (true != asmNan) // if asm value was not NAN
-        {
-            s1 = fail;
-            *failCnt += 1;
-        }
-        else
-        {
-            *passCnt += 1;
-        }
     }
     else if ((inp1Inf ==1) || (inp2Inf == 1)) // if either input was +inf
     {
         calcExpectedValues(INFINITY, &e);
-        if (true != asmInf) // fail if max was not set to +inf
-        {
-            s1 = fail;
-            *failCnt += 1;
-        }
-        else
-        {
-            *passCnt += 1;
-        }
     }
     else if (inp1Inf == -1) // if f1 was -inf, then assume f2 was max
     {
-        calcExpectedValues(testVal2, &e);
-        if (testVal2 != asmResult) 
+        if (inp2Inf == -1)
         {
-            s1 = fail;
-            *failCnt += 1;
+            calcExpectedValues(NEG_INFINITY, &e); // could probably use testVal2 to simplify this...
         }
         else
         {
-            *passCnt += 1;
+            calcExpectedValues(testVal2, &e);
         }
     }
     else if (inp2Inf == -1)  // else if f2 was -inf, then assume f1 was max
     {
         calcExpectedValues(testVal1, &e);
-        if (testVal1 != asmResult) 
-        {
-            s1 = fail;
-            *failCnt += 1;
-        }
-        else
-        {
-            *passCnt += 1;
-        }
     }    
     else if(testVal1<testVal2) // else, check to see which was larger
     {
         calcExpectedValues(testVal2, &e);
-        if (testVal2 != asmResult) 
-        {
-            s1 = fail;
-            *failCnt += 1;
-        }
-        else
-        {
-            *passCnt += 1;
-        }
     }
-    else // either testVal1 is greater, or they are equal
+    else // either testVal1 is greater, or they are equal, or something is horribly wrong
     {
         calcExpectedValues(testVal1, &e);
-        if (testVal1 != asmResult) 
-        {
-            s1 = fail;
-            *failCnt += 1;
-        }
-        else
-        {
-            *passCnt += 1;
-        }
-    }
+    }    
+    
+    // test that the pointer returned by asmFmax points to global fMax
+    check((int32_t)(&fMax),(int32_t)pResult,passCnt,failCnt,&ptrCheck);
+
+    // check the unpacked values
+    check(e.intVal,(int32_t)iMax,passCnt,failCnt,&maxCheck);
+    check(e.signBit,signBitMax,passCnt,failCnt,&sbCheck);
+    check(e.biasedExp,biasedExpMax,passCnt,failCnt,&biasedExpCheck);
+    check(e.unbiasedExp,expMax,passCnt,failCnt,&unbiasedExpCheck);
+    
+    // if expMax is 255, needs special handling.
+    // In that case, allow mantissa with or without hidden bit set.
+    checkMantissa(e.mantissa,mantMax,e.biasedExp,passCnt,failCnt,&mantCheck);
        
     snprintf((char*)txBuffer, MAX_PRINT_LEN,
             "========= Test Number: %d\r\n"
-            "inp1: %.4e; inp2: %.4e \r\n"
-            "expected: %.4e; your result: %.4e; %s \r\n"
-            "pointer check: %s\r\n"
+            "input1:       %8.4e; input2:     %8.4e \r\n"
+            "hex inp1:     0x%08lx; hex inp2: 0x%08lx\r\n"
+            "%s: expected max: %8.4e; asm result: %8.4e\r\n"
+            "%s: pointer check: expected:  0x%" PRIXPTR "; actual: 0x%" PRIXPTR "\r\n"
+            "%s: sign bit expected: %ld; actual: %ld\r\n"
+            "%s: biased expnt expected:   %ld; actual: %ld\r\n"
+            "%s: unbiased expnt expected: %ld; actual: %ld\r\n"
+            "%s: mantissa expected: 0x%08lx; actual: 0x%08lx\r\n"
             "tests passed: %ld; tests failed: %ld \r\n"
             "\r\n",
             testNum,
             testVal1,testVal2,
-            e.floatVal,asmResult,s1,
-            ptrCheck,
+            reinterpret_float_to_uint(testVal1),
+            reinterpret_float_to_uint(testVal2),
+            maxCheck,e.floatVal,asmResult,
+            ptrCheck,(uintptr_t)(&fMax), (uintptr_t)pResult,
+            sbCheck,e.signBit,signBitMax,
+            biasedExpCheck,e.biasedExp,biasedExpMax,
+            unbiasedExpCheck,e.unbiasedExp,expMax,
+            mantCheck,e.mantissa,mantMax,
             *passCnt,*failCnt); 
+    
     printAndWait((char*)txBuffer,txComplete);
     
     return;

@@ -7,11 +7,12 @@
 
 @ Define the globals so that the C code can access them
 
-.global f1,f2,fMax,signBitMax,expMax,mantMax
+.global f1,f2,fMax,signBitMax,biasedExpMax,expMax,mantMax
 .type f1,%gnu_unique_object
 .type f2,%gnu_unique_object
 .type fMax,%gnu_unique_object
 .type signBitMax,%gnu_unique_object
+.type biasedExpMax,%gnu_unique_object
 .type expMax,%gnu_unique_object
 .type mantMax,%gnu_unique_object
 
@@ -161,6 +162,10 @@ where:
 .global asmFmax
 .type asmFmax,%function
 asmFmax:   
+
+    /* Note to Profs: Solution used to test c code is located in Canvas:
+     *    Files -> Lab Files and Coding Examples -> Lab 11 Float Solution
+     */
 
     /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
     
