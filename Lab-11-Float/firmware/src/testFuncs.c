@@ -214,6 +214,26 @@ static void check(int32_t in1,
     return;
 }
 
+static void checkMax(expectedValues *e, 
+        int32_t unpackedValue, 
+        int32_t *goodCount, 
+        int32_t *badCount,
+        char **pfString )
+{
+    if(e->biasedExp == 255) // if NaN or +/-inf ignore mantissa
+    {
+        uint32_t val = e->intVal & 0xFF800000; // keep sign bit and exp
+        uint32_t testVal = unpackedValue & 0xFF800000;
+        check((int32_t)val,(int32_t)testVal,goodCount,badCount,pfString);         
+    }
+    else 
+    {
+        check((int32_t)e->intVal,unpackedValue,goodCount,badCount,pfString);
+    }
+    
+    return;
+}
+
 static void checkMantissa(int32_t expectedMant, 
         int32_t unpackedMant, 
         uint32_t ubExp,    // unbiased exponent
@@ -398,8 +418,10 @@ void testResult(int testNum,
     // test that the pointer returned by asmFmax points to global fMax
     check((int32_t)(&fMax),(int32_t)pResult,passCnt,failCnt,&ptrCheck);
 
+    // check whether the right value was chosen
+    checkMax(&e,(int32_t)iMax,passCnt,failCnt,&maxCheck);
+    
     // check the unpacked values
-    check(e.intVal,(int32_t)iMax,passCnt,failCnt,&maxCheck);
     check(e.signBit,signBitMax,passCnt,failCnt,&sbCheck);
     check(e.biasedExp,biasedExpMax,passCnt,failCnt,&biasedExpCheck);
     check(e.unbiasedExp,expMax,passCnt,failCnt,&unbiasedExpCheck);
