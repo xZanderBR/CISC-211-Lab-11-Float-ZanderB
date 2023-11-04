@@ -214,8 +214,8 @@ static void check(int32_t in1,
     return;
 }
 
-static void checkMantissa(int32_t in1, 
-        int32_t in2, 
+static void checkMantissa(int32_t expectedMant, 
+        int32_t unpackedMant, 
         uint32_t ubExp,    // unbiased exponent
         int32_t *goodCount, 
         int32_t *badCount,
@@ -224,10 +224,22 @@ static void checkMantissa(int32_t in1,
     // if NaN or +/- inf
     if(ubExp == 255) // only check lower 23 bits of mantissa
     {
-        in1 = in1 && 0x7FFFFF;
-        in2 = in2 && 0x7FFFFF;
+        expectedMant = expectedMant && 0x7FFFFF;
+        unpackedMant = unpackedMant && 0x7FFFFF;
+        // since for NaN technically any non-zero value is valid, allow it.
+        if((expectedMant != 0 && unpackedMant != 0) || // Nan
+           (expectedMant == 0 && unpackedMant == 0))   //+/- inf
+        {
+            *goodCount += 1;
+            *pfString = pass;
+        }
+        else
+        {
+            *badCount += 1;
+            *pfString = fail;        
+        }
     }
-    if (in1 == in2)
+    else if (expectedMant == unpackedMant) // compare all 23 bits + hidden bit
     {
         *goodCount += 1;
         *pfString = pass;
